@@ -1,5 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ComprasService } from './compras.service';
+import { COMPRAS_REPOSITORY } from './repositories/compras.repository';
+import { InMemoryComprasRepository } from './repositories/in-memory-compras.repository';
 
 interface SolicitudTestResponse {
   data: {
@@ -30,14 +32,20 @@ describe('ComprasService', () => {
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
-      providers: [ComprasService],
+      providers: [
+        ComprasService,
+        {
+          provide: COMPRAS_REPOSITORY,
+          useClass: InMemoryComprasRepository,
+        },
+      ],
     }).compile();
 
     service = module.get<ComprasService>(ComprasService);
   });
 
-  it('crea una solicitud con totales, detalle y autorizacion inicial', () => {
-    const response = service.crearSolicitud({
+  it('crea una solicitud con totales, detalle y autorizacion inicial', async () => {
+    const response = (await service.crearSolicitud({
       idProveedor: 1,
       descripcion: 'Reposicion de repuestos',
       items: [
@@ -49,7 +57,7 @@ describe('ComprasService', () => {
           iva10: 500000,
         },
       ],
-    }) as unknown as SolicitudTestResponse;
+    })) as unknown as SolicitudTestResponse;
 
     expect(response.data).toMatchObject({
       idProveedor: 1,
@@ -66,8 +74,8 @@ describe('ComprasService', () => {
     });
   });
 
-  it('mantiene un solo contacto principal por proveedor', () => {
-    service.crearContacto(1, {
+  it('mantiene un solo contacto principal por proveedor', async () => {
+    await service.crearContacto(1, {
       nombre: 'Ana',
       apellido: 'Lopez',
       email: 'ana@example.com',
@@ -75,10 +83,10 @@ describe('ComprasService', () => {
       esPrincipal: true,
     });
 
-    const response = service.listarContactos(
+    const response = (await service.listarContactos(
       1,
       {},
-    ) as unknown as ContactosTestResponse;
+    )) as unknown as ContactosTestResponse;
     const principales = response.data.filter(
       (contacto) => contacto.esPrincipal,
     );
@@ -87,12 +95,12 @@ describe('ComprasService', () => {
     expect(principales[0].nombre).toBe('Ana');
   });
 
-  it('rechaza RUC duplicado', () => {
-    expect(() =>
+  it('rechaza RUC duplicado', async () => {
+    await expect(
       service.crearProveedor({
         descripcion: 'Proveedor duplicado',
         ruc: '80123456-7',
       }),
-    ).toThrow();
+    ).rejects.toThrow();
   });
 });

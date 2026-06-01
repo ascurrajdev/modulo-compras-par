@@ -1,6 +1,7 @@
 import {
   ConflictException,
   HttpException,
+  Inject,
   Injectable,
   NotFoundException,
   UnprocessableEntityException,
@@ -18,6 +19,10 @@ import {
   SolicitudCompra,
   Vista,
 } from './compras.types';
+import {
+  COMPRAS_REPOSITORY,
+  ComprasRepository,
+} from './repositories/compras.repository';
 
 type Payload = Record<string, unknown>;
 type DireccionPatch = Partial<Omit<Direccion, 'idDireccion' | 'idProveedor'>>;
@@ -27,62 +32,14 @@ type ContactoPatch = Partial<
 
 @Injectable()
 export class ComprasService {
-  private proveedores: Proveedor[] = [
-    {
-      idProveedor: 1,
-      descripcion: 'Distribuidora Nandu S.A.',
-      ruc: '80123456-7',
-      estado: 'ACTIVO',
-      fechaRegistro: '2026-04-11T10:00:00.000Z',
-    },
-  ];
+  constructor(
+    @Inject(COMPRAS_REPOSITORY)
+    private readonly comprasRepository: ComprasRepository,
+  ) {}
 
-  private direcciones: Direccion[] = [
-    {
-      idDireccion: 1,
-      idProveedor: 1,
-      departamento: 'Central',
-      ciudad: 'Luque',
-      barrio: 'Villa Aurelia',
-      callePrincipal: 'Mcal. Estigarribia',
-      calleSecundaria: null,
-      numero: '1450',
-      referencia: 'Frente al mercado',
-      latitud: -25.2367,
-      longitud: -57.4789,
-      estado: 'ACTIVO',
-    },
-  ];
-
-  private contactos: ContactoProveedor[] = [
-    {
-      idContacto: 1,
-      idProveedor: 1,
-      nombre: 'Carlos',
-      apellido: 'Vera',
-      cargo: 'Gerente Comercial',
-      email: 'cvera@nandu.com.py',
-      telefonoPrincipal: '+595981123456',
-      telefonoSecundario: null,
-      esPrincipal: true,
-      estado: 'ACTIVO',
-    },
-  ];
-
-  private solicitudes: SolicitudCompra[] = [];
-  private detalles: DetalleSolicitud[] = [];
-  private autorizaciones: AutorizacionCompra[] = [];
-
-  private proveedorSeq = 2;
-  private direccionSeq = 2;
-  private contactoSeq = 2;
-  private solicitudSeq = 1;
-  private detalleSeq = 1;
-  private autorizacionSeq = 1;
-
-  listarProveedores(query: Payload): Paginated<Payload> {
+  async listarProveedores(query: Payload): Promise<Paginated<Payload>> {
     const vista = this.parseVista(query.vista);
-    let rows = [...this.proveedores];
+    let rows = await this.comprasRepository.listarProveedores();
 
     if (query.estado) rows = rows.filter((p) => p.estado === query.estado);
     if (query.ruc) rows = rows.filter((p) => p.ruc === query.ruc);
@@ -100,34 +57,35 @@ export class ComprasService {
     );
   }
 
-  crearProveedor(body: Payload): Payload {
+  async crearProveedor(body: Payload): Promise<Payload> {
     const descripcion = this.requireText(body.descripcion, 'descripcion', 200);
     const ruc = this.requireRuc(body.ruc);
     const estado = body.estado ?? 'ACTIVO';
     this.assertEstadoGeneral(estado, 'estado');
-    this.assertUniqueRuc(ruc);
+    await this.assertUniqueRuc(ruc);
 
-    const proveedor: Proveedor = {
-      idProveedor: this.proveedorSeq++,
+    const proveedor = await this.comprasRepository.crearProveedor({
       descripcion,
       ruc,
       estado,
       fechaRegistro: new Date().toISOString(),
-    };
+    });
 
-    this.proveedores.push(proveedor);
-    return { data: this.proveedorVista(proveedor, 1) };
+    return { data: await this.proveedorVista(proveedor, 1) };
   }
 
-  obtenerProveedor(id: number, vista: unknown): Payload {
+  async obtenerProveedor(id: number, vista: unknown): Promise<Payload> {
     return {
-      data: this.proveedorVista(this.findProveedor(id), this.parseVista(vista)),
+      data: await this.proveedorVista(
+        await this.findProveedor(id),
+        this.parseVista(vista),
+      ),
     };
   }
 
-  actualizarProveedor(id: number, body: Payload): Payload {
+  async actualizarProveedor(id: number, body: Payload): Promise<Payload> {
     this.assertHasBody(body);
-    const proveedor = this.findProveedor(id);
+    const proveedor = await this.findProveedor(id);
 
     if (body.descripcion !== undefined) {
       proveedor.descripcion = this.requireText(
@@ -138,7 +96,7 @@ export class ComprasService {
     }
     if (body.ruc !== undefined) {
       const ruc = this.requireRuc(body.ruc);
-      this.assertUniqueRuc(ruc, id);
+      await this.assertUniqueRuc(ruc, id);
       proveedor.ruc = ruc;
     }
     if (body.estado !== undefined) {
@@ -146,42 +104,57 @@ export class ComprasService {
       proveedor.estado = body.estado;
     }
 
-    return { data: this.proveedorVista(proveedor, 1) };
+    const updated = await this.comprasRepository.actualizarProveedor(proveedor);
+    return { data: await this.proveedorVista(updated, 1) };
   }
 
-  listarDirecciones(proveedorId: number, query: Payload): Payload {
-    this.findProveedor(proveedorId);
-    let data = this.direcciones.filter((d) => d.idProveedor === proveedorId);
+  async listarDirecciones(
+    proveedorId: number,
+    query: Payload,
+  ): Promise<Payload> {
+    await this.findProveedor(proveedorId);
+    let data = (await this.comprasRepository.listarDirecciones()).filter(
+      (d) => d.idProveedor === proveedorId,
+    );
     if (query.estado) data = data.filter((d) => d.estado === query.estado);
     return { data };
   }
 
-  crearDireccion(proveedorId: number, body: Payload): Payload {
-    this.findProveedor(proveedorId);
-    const direccion = this.buildDireccion(proveedorId, body);
-    this.direcciones.push(direccion);
+  async crearDireccion(proveedorId: number, body: Payload): Promise<Payload> {
+    await this.findProveedor(proveedorId);
+    const direccion = await this.comprasRepository.crearDireccion(
+      this.buildDireccion(proveedorId, body),
+    );
     return { data: direccion };
   }
 
-  obtenerDireccion(proveedorId: number, direccionId: number): Payload {
-    return { data: this.findDireccion(proveedorId, direccionId) };
+  async obtenerDireccion(
+    proveedorId: number,
+    direccionId: number,
+  ): Promise<Payload> {
+    return { data: await this.findDireccion(proveedorId, direccionId) };
   }
 
-  actualizarDireccion(
+  async actualizarDireccion(
     proveedorId: number,
     direccionId: number,
     body: Payload,
-  ): Payload {
+  ): Promise<Payload> {
     this.assertHasBody(body);
-    const direccion = this.findDireccion(proveedorId, direccionId);
+    const direccion = await this.findDireccion(proveedorId, direccionId);
     const patch = this.normalizeDireccionPatch(body);
-    Object.assign(direccion, patch);
-    return { data: direccion };
+    const updated = await this.comprasRepository.actualizarDireccion({
+      ...direccion,
+      ...patch,
+    });
+    return { data: updated };
   }
 
-  listarContactos(proveedorId: number, query: Payload): Payload {
-    this.findProveedor(proveedorId);
-    let data = this.contactos.filter((c) => c.idProveedor === proveedorId);
+  async listarContactos(proveedorId: number, query: Payload): Promise<Payload> {
+    await this.findProveedor(proveedorId);
+    let data = (await this.comprasRepository.listarContactos()).filter(
+      (c) => c.idProveedor === proveedorId,
+    );
     if (query.estado) data = data.filter((c) => c.estado === query.estado);
     if (query.esPrincipal !== undefined) {
       const principal = this.parseBoolean(query.esPrincipal, 'esPrincipal');
@@ -190,34 +163,42 @@ export class ComprasService {
     return { data };
   }
 
-  crearContacto(proveedorId: number, body: Payload): Payload {
-    this.findProveedor(proveedorId);
+  async crearContacto(proveedorId: number, body: Payload): Promise<Payload> {
+    await this.findProveedor(proveedorId);
     const contacto = this.buildContacto(proveedorId, body);
-    if (contacto.esPrincipal) this.clearContactoPrincipal(proveedorId);
-    this.contactos.push(contacto);
-    return { data: contacto };
+    if (contacto.esPrincipal) await this.clearContactoPrincipal(proveedorId);
+    const created = await this.comprasRepository.crearContacto(contacto);
+    return { data: created };
   }
 
-  obtenerContacto(proveedorId: number, contactoId: number): Payload {
-    return { data: this.findContacto(proveedorId, contactoId) };
+  async obtenerContacto(
+    proveedorId: number,
+    contactoId: number,
+  ): Promise<Payload> {
+    return { data: await this.findContacto(proveedorId, contactoId) };
   }
 
-  actualizarContacto(
+  async actualizarContacto(
     proveedorId: number,
     contactoId: number,
     body: Payload,
-  ): Payload {
+  ): Promise<Payload> {
     this.assertHasBody(body);
-    const contacto = this.findContacto(proveedorId, contactoId);
+    const contacto = await this.findContacto(proveedorId, contactoId);
     const patch = this.normalizeContactoPatch(body);
-    if (patch.esPrincipal) this.clearContactoPrincipal(proveedorId, contactoId);
-    Object.assign(contacto, patch);
-    return { data: contacto };
+    if (patch.esPrincipal) {
+      await this.clearContactoPrincipal(proveedorId, contactoId);
+    }
+    const updated = await this.comprasRepository.actualizarContacto({
+      ...contacto,
+      ...patch,
+    });
+    return { data: updated };
   }
 
-  listarSolicitudes(query: Payload): Paginated<Payload> {
+  async listarSolicitudes(query: Payload): Promise<Paginated<Payload>> {
     const vista = this.parseVista(query.vista);
-    let rows = [...this.solicitudes];
+    let rows = await this.comprasRepository.listarSolicitudes();
 
     if (query.estado) rows = rows.filter((s) => s.estado === query.estado);
     if (query.proveedorId) {
@@ -241,9 +222,9 @@ export class ComprasService {
     );
   }
 
-  crearSolicitud(body: Payload): Payload {
+  async crearSolicitud(body: Payload): Promise<Payload> {
     const proveedorId = this.parseId(body.idProveedor, 'idProveedor');
-    const proveedor = this.findProveedor(proveedorId);
+    const proveedor = await this.findProveedor(proveedorId);
     if (proveedor.estado !== 'ACTIVO') {
       throw this.conflict(
         'El proveedor debe estar ACTIVO para crear solicitudes.',
@@ -266,68 +247,68 @@ export class ComprasService {
       );
     }
 
-    const idSolicitud = this.solicitudSeq++;
-    const items = rawItems.map((item, index) => {
+    const detalles = rawItems.map((item, index) => {
       if (!this.isPayload(item)) {
         throw this.validation(`items.${index}`, 'Debe ser un objeto.');
       }
-      return this.buildDetalle(idSolicitud, item);
+      return this.buildDetalle(item);
     });
-    const subtotalIva5 = items.reduce((acc, item) => acc + item.iva5, 0);
-    const subtotalIva10 = items.reduce((acc, item) => acc + item.iva10, 0);
-    const subtotalExenta = items.reduce((acc, item) => acc + item.exenta, 0);
+    const subtotalIva5 = detalles.reduce((acc, item) => acc + item.iva5, 0);
+    const subtotalIva10 = detalles.reduce((acc, item) => acc + item.iva10, 0);
+    const subtotalExenta = detalles.reduce((acc, item) => acc + item.exenta, 0);
 
-    const solicitud: SolicitudCompra = {
-      idSolicitud,
-      numeroReferencia: this.generateNumeroReferencia(now, idSolicitud),
-      idProveedor: proveedorId,
-      descripcion: this.optionalText(body.descripcion, 'descripcion', 200),
-      estado: 'PENDIENTE',
-      subtotalIva5,
-      subtotalIva10,
-      subtotalExenta,
-      montoTotal: subtotalIva5 + subtotalIva10 + subtotalExenta,
-      fechaCreacion: now.toISOString(),
-      fechaReqEntrega,
-    };
+    const created = await this.comprasRepository.crearSolicitud({
+      solicitud: {
+        idProveedor: proveedorId,
+        descripcion: this.optionalText(body.descripcion, 'descripcion', 200),
+        estado: 'PENDIENTE',
+        subtotalIva5,
+        subtotalIva10,
+        subtotalExenta,
+        montoTotal: subtotalIva5 + subtotalIva10 + subtotalExenta,
+        fechaCreacion: now.toISOString(),
+        fechaReqEntrega,
+      },
+      detalles,
+      autorizacion: {
+        estado: 'EN_PROCESO',
+        kafkaMessageId: this.generateKafkaMessageId(),
+        fechaEnvioKafka: new Date().toISOString(),
+        fechaRespuestaCaja: null,
+        resultadoCaja: null,
+        observacion: 'Publicacion aceptada por compras.solicitudes.',
+      },
+      numeroReferenciaFactory: (id) => this.generateNumeroReferencia(now, id),
+    });
 
-    const autorizacion: AutorizacionCompra = {
-      idAutorizacion: this.autorizacionSeq++,
-      idSolicitud,
-      estado: 'EN_PROCESO',
-      kafkaMessageId: this.generateKafkaMessageId(),
-      fechaEnvioKafka: new Date().toISOString(),
-      fechaRespuestaCaja: null,
-      resultadoCaja: null,
-      observacion: 'Publicacion aceptada por compras.solicitudes.',
-    };
-
-    this.solicitudes.push(solicitud);
-    this.detalles.push(...items);
-    this.autorizaciones.push(autorizacion);
-
-    return { data: this.solicitudVista(solicitud, 3) };
+    return { data: await this.solicitudVista(created.solicitud, 3) };
   }
 
-  obtenerSolicitud(id: number, vista: unknown): Payload {
+  async obtenerSolicitud(id: number, vista: unknown): Promise<Payload> {
     return {
-      data: this.solicitudVista(this.findSolicitud(id), this.parseVista(vista)),
-    };
-  }
-
-  obtenerAutorizacionPorSolicitud(id: number, vista: unknown): Payload {
-    this.findSolicitud(id);
-    return {
-      data: this.autorizacionVista(
-        this.findAutorizacionBySolicitud(id),
+      data: await this.solicitudVista(
+        await this.findSolicitud(id),
         this.parseVista(vista),
       ),
     };
   }
 
-  reintentarPublicacion(id: number): Payload {
-    this.findSolicitud(id);
-    const autorizacion = this.findAutorizacionBySolicitud(id);
+  async obtenerAutorizacionPorSolicitud(
+    id: number,
+    vista: unknown,
+  ): Promise<Payload> {
+    await this.findSolicitud(id);
+    return {
+      data: this.autorizacionVista(
+        await this.findAutorizacionBySolicitud(id),
+        this.parseVista(vista),
+      ),
+    };
+  }
+
+  async reintentarPublicacion(id: number): Promise<Payload> {
+    await this.findSolicitud(id);
+    const autorizacion = await this.findAutorizacionBySolicitud(id);
     if (!['ERROR_KAFKA', 'PENDIENTE_ENVIO'].includes(autorizacion.estado)) {
       throw this.conflict(
         'Solo se puede reintentar desde los estados ERROR_KAFKA o PENDIENTE_ENVIO.',
@@ -340,12 +321,14 @@ export class ComprasService {
     autorizacion.fechaEnvioKafka = new Date().toISOString();
     autorizacion.observacion = 'Reintento de publicacion iniciado.';
 
-    return { data: this.autorizacionVista(autorizacion, 2) };
+    const updated =
+      await this.comprasRepository.actualizarAutorizacion(autorizacion);
+    return { data: this.autorizacionVista(updated, 2) };
   }
 
-  listarAutorizaciones(query: Payload): Paginated<Payload> {
+  async listarAutorizaciones(query: Payload): Promise<Paginated<Payload>> {
     const vista = this.parseVista(query.vista);
-    let rows = [...this.autorizaciones];
+    let rows = await this.comprasRepository.listarAutorizaciones();
 
     if (query.estado) rows = rows.filter((a) => a.estado === query.estado);
     if (query.resultadoCaja) {
@@ -360,39 +343,50 @@ export class ComprasService {
     );
   }
 
-  obtenerAutorizacion(id: number, vista: unknown): Payload {
+  async obtenerAutorizacion(id: number, vista: unknown): Promise<Payload> {
     return {
       data: this.autorizacionVista(
-        this.findAutorizacion(id),
+        await this.findAutorizacion(id),
         this.parseVista(vista),
       ),
     };
   }
 
-  private proveedorVista(proveedor: Proveedor, vista: Vista): Payload {
+  private async proveedorVista(
+    proveedor: Proveedor,
+    vista: Vista,
+  ): Promise<Payload> {
     const base: Payload = { ...proveedor };
     if (vista >= 2) {
-      base.direcciones = this.direcciones.filter(
+      const direcciones = await this.comprasRepository.listarDirecciones();
+      base.direcciones = direcciones.filter(
         (direccion) => direccion.idProveedor === proveedor.idProveedor,
       );
     }
     if (vista >= 3) {
-      base.contactos = this.contactos.filter(
+      const contactos = await this.comprasRepository.listarContactos();
+      base.contactos = contactos.filter(
         (contacto) => contacto.idProveedor === proveedor.idProveedor,
       );
     }
     return base;
   }
 
-  private solicitudVista(solicitud: SolicitudCompra, vista: Vista): Payload {
+  private async solicitudVista(
+    solicitud: SolicitudCompra,
+    vista: Vista,
+  ): Promise<Payload> {
     const base: Payload = { ...solicitud };
     if (vista >= 2) {
-      base.items = this.detalles.filter(
+      const detalles = await this.comprasRepository.listarDetalles();
+      base.items = detalles.filter(
         (detalle) => detalle.idSolicitud === solicitud.idSolicitud,
       );
     }
     if (vista >= 3) {
-      const autorizacion = this.autorizaciones.find(
+      const autorizaciones =
+        await this.comprasRepository.listarAutorizaciones();
+      const autorizacion = autorizaciones.find(
         (item) => item.idSolicitud === solicitud.idSolicitud,
       );
       base.autorizacion = autorizacion
@@ -423,10 +417,12 @@ export class ComprasService {
     return base;
   }
 
-  private buildDireccion(proveedorId: number, body: Payload): Direccion {
+  private buildDireccion(
+    proveedorId: number,
+    body: Payload,
+  ): Omit<Direccion, 'idDireccion'> {
     const patch = this.normalizeDireccionPatch(body, true);
     return {
-      idDireccion: this.direccionSeq++,
       idProveedor: proveedorId,
       departamento: patch.departamento!,
       ciudad: patch.ciudad!,
@@ -497,10 +493,12 @@ export class ComprasService {
     return patch;
   }
 
-  private buildContacto(proveedorId: number, body: Payload): ContactoProveedor {
+  private buildContacto(
+    proveedorId: number,
+    body: Payload,
+  ): Omit<ContactoProveedor, 'idContacto'> {
     const patch = this.normalizeContactoPatch(body, true);
     return {
-      idContacto: this.contactoSeq++,
       idProveedor: proveedorId,
       nombre: patch.nombre!,
       apellido: patch.apellido!,
@@ -563,7 +561,9 @@ export class ComprasService {
     return patch;
   }
 
-  private buildDetalle(idSolicitud: number, body: Payload): DetalleSolicitud {
+  private buildDetalle(
+    body: Payload,
+  ): Omit<DetalleSolicitud, 'idDetalle' | 'idSolicitud'> {
     const productoId = this.requireText(body.productoId, 'productoId', 50);
     const productoNombre = this.requireText(
       body.productoNombre,
@@ -580,8 +580,6 @@ export class ComprasService {
     const exenta = this.nonNegativeInteger(body.exenta ?? 0, 'exenta');
 
     return {
-      idDetalle: this.detalleSeq++,
-      idSolicitud,
       productoId,
       productoNombre,
       cantidad,
@@ -596,17 +594,19 @@ export class ComprasService {
   private paginate<T, R>(
     rows: T[],
     query: PageQuery,
-    mapper: (item: T) => R,
-  ): Paginated<R> {
+    mapper: (item: T) => R | Promise<R>,
+  ): Promise<Paginated<R>> {
     const page = this.optionalPageNumber(query.page, 'page', 1);
     const size = this.optionalPageNumber(query.size, 'size', 20);
     const start = (page - 1) * size;
-    return {
-      page,
-      size,
-      total: rows.length,
-      data: rows.slice(start, start + size).map(mapper),
-    };
+    return Promise.all(rows.slice(start, start + size).map(mapper)).then(
+      (data) => ({
+        page,
+        size,
+        total: rows.length,
+        data,
+      }),
+    );
   }
 
   private parseVista(value: unknown): Vista {
@@ -639,15 +639,20 @@ export class ComprasService {
     return parsed;
   }
 
-  private findProveedor(id: number): Proveedor {
-    const proveedor = this.proveedores.find((item) => item.idProveedor === id);
+  private async findProveedor(id: number): Promise<Proveedor> {
+    const proveedor = (await this.comprasRepository.listarProveedores()).find(
+      (item) => item.idProveedor === id,
+    );
     if (!proveedor) throw this.notFound('Proveedor no encontrado.');
     return proveedor;
   }
 
-  private findDireccion(proveedorId: number, direccionId: number): Direccion {
-    this.findProveedor(proveedorId);
-    const direccion = this.direcciones.find(
+  private async findDireccion(
+    proveedorId: number,
+    direccionId: number,
+  ): Promise<Direccion> {
+    await this.findProveedor(proveedorId);
+    const direccion = (await this.comprasRepository.listarDirecciones()).find(
       (item) =>
         item.idProveedor === proveedorId && item.idDireccion === direccionId,
     );
@@ -655,12 +660,12 @@ export class ComprasService {
     return direccion;
   }
 
-  private findContacto(
+  private async findContacto(
     proveedorId: number,
     contactoId: number,
-  ): ContactoProveedor {
-    this.findProveedor(proveedorId);
-    const contacto = this.contactos.find(
+  ): Promise<ContactoProveedor> {
+    await this.findProveedor(proveedorId);
+    const contacto = (await this.comprasRepository.listarContactos()).find(
       (item) =>
         item.idProveedor === proveedorId && item.idContacto === contactoId,
     );
@@ -668,44 +673,55 @@ export class ComprasService {
     return contacto;
   }
 
-  private findSolicitud(id: number): SolicitudCompra {
-    const solicitud = this.solicitudes.find((item) => item.idSolicitud === id);
+  private async findSolicitud(id: number): Promise<SolicitudCompra> {
+    const solicitud = (await this.comprasRepository.listarSolicitudes()).find(
+      (item) => item.idSolicitud === id,
+    );
     if (!solicitud) throw this.notFound('Solicitud de compra no encontrada.');
     return solicitud;
   }
 
-  private findAutorizacion(id: number): AutorizacionCompra {
-    const autorizacion = this.autorizaciones.find(
-      (item) => item.idAutorizacion === id,
-    );
+  private async findAutorizacion(id: number): Promise<AutorizacionCompra> {
+    const autorizacion = (
+      await this.comprasRepository.listarAutorizaciones()
+    ).find((item) => item.idAutorizacion === id);
     if (!autorizacion)
       throw this.notFound('Autorizacion de compra no encontrada.');
     return autorizacion;
   }
 
-  private findAutorizacionBySolicitud(idSolicitud: number): AutorizacionCompra {
-    const autorizacion = this.autorizaciones.find(
-      (item) => item.idSolicitud === idSolicitud,
-    );
+  private async findAutorizacionBySolicitud(
+    idSolicitud: number,
+  ): Promise<AutorizacionCompra> {
+    const autorizacion = (
+      await this.comprasRepository.listarAutorizaciones()
+    ).find((item) => item.idSolicitud === idSolicitud);
     if (!autorizacion)
       throw this.notFound('Autorizacion de compra no encontrada.');
     return autorizacion;
   }
 
-  private clearContactoPrincipal(proveedorId: number, exceptId?: number): void {
-    this.contactos
+  private async clearContactoPrincipal(
+    proveedorId: number,
+    exceptId?: number,
+  ): Promise<void> {
+    const contactos = (await this.comprasRepository.listarContactos())
       .filter(
         (contacto) =>
           contacto.idProveedor === proveedorId &&
-          contacto.idContacto !== exceptId,
+          contacto.idContacto !== exceptId &&
+          contacto.esPrincipal,
       )
-      .forEach((contacto) => {
-        contacto.esPrincipal = false;
-      });
+      .map((contacto) => ({ ...contacto, esPrincipal: false }));
+
+    await this.comprasRepository.actualizarContactos(contactos);
   }
 
-  private assertUniqueRuc(ruc: string, currentId?: number): void {
-    const exists = this.proveedores.some(
+  private async assertUniqueRuc(
+    ruc: string,
+    currentId?: number,
+  ): Promise<void> {
+    const exists = (await this.comprasRepository.listarProveedores()).some(
       (proveedor) =>
         proveedor.ruc === ruc && proveedor.idProveedor !== currentId,
     );

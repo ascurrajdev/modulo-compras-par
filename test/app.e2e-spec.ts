@@ -28,7 +28,14 @@ interface SolicitudCreateResponse {
 }
 
 describe('Compras API (e2e)', () => {
+  const apiKey = 'test-api-key';
   let app: INestApplication<App>;
+  let previousApiKey: string | undefined;
+
+  beforeAll(() => {
+    previousApiKey = process.env.COMPRAS_API_KEY;
+    process.env.COMPRAS_API_KEY = apiKey;
+  });
 
   beforeEach(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -43,9 +50,25 @@ describe('Compras API (e2e)', () => {
     await app.close();
   });
 
+  afterAll(() => {
+    if (previousApiKey === undefined) {
+      delete process.env.COMPRAS_API_KEY;
+      return;
+    }
+
+    process.env.COMPRAS_API_KEY = previousApiKey;
+  });
+
+  it('rechaza requests sin x-api-key', async () => {
+    await request(app.getHttpServer())
+      .get('/compras/v3/proveedores?vista=3')
+      .expect(401);
+  });
+
   it('lista proveedores con vista 3', async () => {
     const response = await request(app.getHttpServer())
       .get('/compras/v3/proveedores?vista=3')
+      .set('x-api-key', apiKey)
       .expect(200);
 
     const body = response.body as ProveedoresResponse;
@@ -56,11 +79,14 @@ describe('Compras API (e2e)', () => {
   });
 
   it('crea proveedor y solicitud de compra', async () => {
+    const ruc = `${Math.floor(10000000 + Math.random() * 89999999)}-1`;
+
     const proveedorResponse = await request(app.getHttpServer())
       .post('/compras/v3/proveedores')
+      .set('x-api-key', apiKey)
       .send({
         descripcion: 'Importadora del Sur S.R.L.',
-        ruc: '95432100-1',
+        ruc,
       })
       .expect(201);
 
@@ -68,6 +94,7 @@ describe('Compras API (e2e)', () => {
 
     const solicitudResponse = await request(app.getHttpServer())
       .post('/compras/v3/solicitudes-compra')
+      .set('x-api-key', apiKey)
       .send({
         idProveedor: proveedorBody.data.idProveedor,
         descripcion: 'Compra de insumos',
