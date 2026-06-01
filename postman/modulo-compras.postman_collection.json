@@ -1,0 +1,724 @@
+{
+  "info": {
+    "_postman_id": "0a1ed6a0-9c81-4b4f-9c69-f54f28735f5b",
+    "name": "Modulo Compras API",
+    "description": "Coleccion para probar el servicio de compras con header x-api-key.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "apikey",
+    "apikey": [
+      {
+        "key": "key",
+        "value": "x-api-key",
+        "type": "string"
+      },
+      {
+        "key": "value",
+        "value": "{{apiKey}}",
+        "type": "string"
+      },
+      {
+        "key": "in",
+        "value": "header",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "if (!pm.collectionVariables.get('rucProveedor')) {",
+          "  pm.collectionVariables.set('rucProveedor', `${Math.floor(10000000 + Math.random() * 90000000)}-1`);",
+          "}"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000"
+    },
+    {
+      "key": "apiKey",
+      "value": "change-me"
+    },
+    {
+      "key": "proveedorId",
+      "value": "1"
+    },
+    {
+      "key": "direccionId",
+      "value": "1"
+    },
+    {
+      "key": "contactoId",
+      "value": "1"
+    },
+    {
+      "key": "solicitudId",
+      "value": "1"
+    },
+    {
+      "key": "autorizacionId",
+      "value": "1"
+    },
+    {
+      "key": "rucProveedor",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "Proveedores",
+      "item": [
+        {
+          "name": "Listar proveedores",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/compras/v3/proveedores?vista=3&page=1&size=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "compras",
+                "v3",
+                "proveedores"
+              ],
+              "query": [
+                {
+                  "key": "vista",
+                  "value": "3"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                },
+                {
+                  "key": "estado",
+                  "value": "ACTIVO",
+                  "disabled": true
+                },
+                {
+                  "key": "ruc",
+                  "value": "{{rucProveedor}}",
+                  "disabled": true
+                },
+                {
+                  "key": "descripcion",
+                  "value": "Importadora",
+                  "disabled": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Crear proveedor",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('rucProveedor', `${Math.floor(10000000 + Math.random() * 90000000)}-1`);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const body = pm.response.json();",
+                  "  pm.collectionVariables.set('proveedorId', body.data.idProveedor);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"descripcion\": \"Importadora del Sur S.R.L.\",\n  \"ruc\": \"{{rucProveedor}}\",\n  \"estado\": \"ACTIVO\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/compras/v3/proveedores",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "compras",
+                "v3",
+                "proveedores"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Obtener proveedor",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/compras/v3/proveedores/{{proveedorId}}?vista=3",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "compras",
+                "v3",
+                "proveedores",
+                "{{proveedorId}}"
+              ],
+              "query": [
+                {
+                  "key": "vista",
+                  "value": "3"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Actualizar proveedor",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"descripcion\": \"Importadora del Sur Actualizada\",\n  \"estado\": \"ACTIVO\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/compras/v3/proveedores/{{proveedorId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "compras",
+                "v3",
+                "proveedores",
+                "{{proveedorId}}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Direcciones",
+      "item": [
+        {
+          "name": "Listar direcciones",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/compras/v3/proveedores/{{proveedorId}}/direcciones?estado=ACTIVO",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "compras",
+                "v3",
+                "proveedores",
+                "{{proveedorId}}",
+                "direcciones"
+              ],
+              "query": [
+                {
+                  "key": "estado",
+                  "value": "ACTIVO"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Crear direccion",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const body = pm.response.json();",
+                  "  pm.collectionVariables.set('direccionId', body.data.idDireccion);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"departamento\": \"Central\",\n  \"ciudad\": \"Luque\",\n  \"barrio\": \"Villa Aurelia\",\n  \"callePrincipal\": \"Mcal. Estigarribia\",\n  \"calleSecundaria\": null,\n  \"numero\": \"1450\",\n  \"referencia\": \"Frente al mercado\",\n  \"latitud\": -25.2367,\n  \"longitud\": -57.4789,\n  \"estado\": \"ACTIVO\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/compras/v3/proveedores/{{proveedorId}}/direcciones",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "compras",
+                "v3",
+                "proveedores",
+                "{{proveedorId}}",
+                "direcciones"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Obtener direccion",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/compras/v3/proveedores/{{proveedorId}}/direcciones/{{direccionId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "compras",
+                "v3",
+                "proveedores",
+                "{{proveedorId}}",
+                "direcciones",
+                "{{direccionId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Actualizar direccion",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"referencia\": \"Porton principal\",\n  \"estado\": \"ACTIVO\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/compras/v3/proveedores/{{proveedorId}}/direcciones/{{direccionId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "compras",
+                "v3",
+                "proveedores",
+                "{{proveedorId}}",
+                "direcciones",
+                "{{direccionId}}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Contactos",
+      "item": [
+        {
+          "name": "Listar contactos",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/compras/v3/proveedores/{{proveedorId}}/contactos?estado=ACTIVO",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "compras",
+                "v3",
+                "proveedores",
+                "{{proveedorId}}",
+                "contactos"
+              ],
+              "query": [
+                {
+                  "key": "estado",
+                  "value": "ACTIVO"
+                },
+                {
+                  "key": "esPrincipal",
+                  "value": "true",
+                  "disabled": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Crear contacto",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const body = pm.response.json();",
+                  "  pm.collectionVariables.set('contactoId', body.data.idContacto);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Ana\",\n  \"apellido\": \"Lopez\",\n  \"cargo\": \"Compras\",\n  \"email\": \"ana.lopez@example.com\",\n  \"telefonoPrincipal\": \"+595981222333\",\n  \"telefonoSecundario\": null,\n  \"esPrincipal\": true,\n  \"estado\": \"ACTIVO\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/compras/v3/proveedores/{{proveedorId}}/contactos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "compras",
+                "v3",
+                "proveedores",
+                "{{proveedorId}}",
+                "contactos"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Obtener contacto",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/compras/v3/proveedores/{{proveedorId}}/contactos/{{contactoId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "compras",
+                "v3",
+                "proveedores",
+                "{{proveedorId}}",
+                "contactos",
+                "{{contactoId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Actualizar contacto",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cargo\": \"Responsable de compras\",\n  \"esPrincipal\": true,\n  \"estado\": \"ACTIVO\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/compras/v3/proveedores/{{proveedorId}}/contactos/{{contactoId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "compras",
+                "v3",
+                "proveedores",
+                "{{proveedorId}}",
+                "contactos",
+                "{{contactoId}}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Solicitudes de compra",
+      "item": [
+        {
+          "name": "Listar solicitudes",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/compras/v3/solicitudes-compra?vista=3&page=1&size=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "compras",
+                "v3",
+                "solicitudes-compra"
+              ],
+              "query": [
+                {
+                  "key": "vista",
+                  "value": "3"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                },
+                {
+                  "key": "estado",
+                  "value": "PENDIENTE",
+                  "disabled": true
+                },
+                {
+                  "key": "proveedorId",
+                  "value": "{{proveedorId}}",
+                  "disabled": true
+                },
+                {
+                  "key": "fechaDesde",
+                  "value": "2026-01-01",
+                  "disabled": true
+                },
+                {
+                  "key": "fechaHasta",
+                  "value": "2026-12-31",
+                  "disabled": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Crear solicitud",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const body = pm.response.json();",
+                  "  pm.collectionVariables.set('solicitudId', body.data.idSolicitud);",
+                  "  if (body.data.autorizacion) {",
+                  "    pm.collectionVariables.set('autorizacionId', body.data.autorizacion.idAutorizacion);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"idProveedor\": {{proveedorId}},\n  \"descripcion\": \"Compra de insumos\",\n  \"fechaReqEntrega\": null,\n  \"items\": [\n    {\n      \"productoId\": \"PROD-100\",\n      \"productoNombre\": \"Caja de tornillos\",\n      \"cantidad\": 3,\n      \"precioUnitario\": 12000,\n      \"iva5\": 0,\n      \"iva10\": 36000,\n      \"exenta\": 0\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/compras/v3/solicitudes-compra",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "compras",
+                "v3",
+                "solicitudes-compra"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Obtener solicitud",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/compras/v3/solicitudes-compra/{{solicitudId}}?vista=3",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "compras",
+                "v3",
+                "solicitudes-compra",
+                "{{solicitudId}}"
+              ],
+              "query": [
+                {
+                  "key": "vista",
+                  "value": "3"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Obtener autorizacion por solicitud",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/compras/v3/solicitudes-compra/{{solicitudId}}/autorizacion?vista=3",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "compras",
+                "v3",
+                "solicitudes-compra",
+                "{{solicitudId}}",
+                "autorizacion"
+              ],
+              "query": [
+                {
+                  "key": "vista",
+                  "value": "3"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Reintentar publicacion",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/compras/v3/solicitudes-compra/{{solicitudId}}/reintentos-publicacion",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "compras",
+                "v3",
+                "solicitudes-compra",
+                "{{solicitudId}}",
+                "reintentos-publicacion"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Autorizaciones de compra",
+      "item": [
+        {
+          "name": "Listar autorizaciones",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/compras/v3/autorizaciones-compra?vista=3&page=1&size=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "compras",
+                "v3",
+                "autorizaciones-compra"
+              ],
+              "query": [
+                {
+                  "key": "vista",
+                  "value": "3"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "size",
+                  "value": "20"
+                },
+                {
+                  "key": "estado",
+                  "value": "EN_PROCESO",
+                  "disabled": true
+                },
+                {
+                  "key": "resultadoCaja",
+                  "value": "APROBADA",
+                  "disabled": true
+                },
+                {
+                  "key": "kafkaMessageId",
+                  "value": "msg-example",
+                  "disabled": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Obtener autorizacion",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/compras/v3/autorizaciones-compra/{{autorizacionId}}?vista=3",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "compras",
+                "v3",
+                "autorizaciones-compra",
+                "{{autorizacionId}}"
+              ],
+              "query": [
+                {
+                  "key": "vista",
+                  "value": "3"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
