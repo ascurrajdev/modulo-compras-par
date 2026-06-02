@@ -120,6 +120,8 @@ describe('Compras API (e2e)', () => {
       subtotalIva10: 36000,
       montoTotal: 36000,
     });
-    expect(solicitudBody.data.autorizacion.kafkaMessageId).toMatch(/^msg-/);
+    expect(solicitudBody.data.autorizacion.kafkaMessageId).toMatch(
+      /^(local|msg)-/,
+    );
   });
 });

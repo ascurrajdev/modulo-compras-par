@@ -1,5 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ComprasService } from './compras.service';
+import { COMPRAS_PUBLISHER } from './publishers/compras-publisher';
+import { InMemoryComprasPublisher } from './publishers/in-memory-compras.publisher';
 import { COMPRAS_REPOSITORY } from './repositories/compras.repository';
 import { InMemoryComprasRepository } from './repositories/in-memory-compras.repository';
 
@@ -37,6 +39,10 @@ describe('ComprasService', () => {
         {
           provide: COMPRAS_REPOSITORY,
           useClass: InMemoryComprasRepository,
+        },
+        {
+          provide: COMPRAS_PUBLISHER,
+          useClass: InMemoryComprasPublisher,
         },
       ],
     }).compile();

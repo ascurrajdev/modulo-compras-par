@@ -20,6 +20,10 @@ import {
   Vista,
 } from './compras.types';
 import {
+  COMPRAS_PUBLISHER,
+  ComprasPublisher,
+} from './publishers/compras-publisher';
+import {
   COMPRAS_REPOSITORY,
   ComprasRepository,
 } from './repositories/compras.repository';
@@ -35,6 +39,8 @@ export class ComprasService {
   constructor(
     @Inject(COMPRAS_REPOSITORY)
     private readonly comprasRepository: ComprasRepository,
+    @Inject(COMPRAS_PUBLISHER)
+    private readonly comprasPublisher: ComprasPublisher,
   ) {}
 
   async listarProveedores(query: Payload): Promise<Paginated<Payload>> {
@@ -271,15 +277,17 @@ export class ComprasService {
       },
       detalles,
       autorizacion: {
-        estado: 'EN_PROCESO',
-        kafkaMessageId: this.generateKafkaMessageId(),
-        fechaEnvioKafka: new Date().toISOString(),
+        estado: 'PENDIENTE_ENVIO',
+        kafkaMessageId: null,
+        fechaEnvioKafka: null,
         fechaRespuestaCaja: null,
         resultadoCaja: null,
-        observacion: 'Publicacion aceptada por compras.solicitudes.',
+        observacion: 'Solicitud pendiente de publicacion en Kafka.',
       },
       numeroReferenciaFactory: (id) => this.generateNumeroReferencia(now, id),
     });
+
+    await this.publicarSolicitudCreada(created.solicitud, created.autorizacion);
 
     return { data: await this.solicitudVista(created.solicitud, 3) };
   }
@@ -307,7 +315,7 @@ export class ComprasService {
   }
 
   async reintentarPublicacion(id: number): Promise<Payload> {
-    await this.findSolicitud(id);
+    const solicitud = await this.findSolicitud(id);
     const autorizacion = await this.findAutorizacionBySolicitud(id);
     if (!['ERROR_KAFKA', 'PENDIENTE_ENVIO'].includes(autorizacion.estado)) {
       throw this.conflict(
@@ -316,13 +324,11 @@ export class ComprasService {
       );
     }
 
-    autorizacion.estado = 'ENVIANDO';
-    autorizacion.kafkaMessageId = this.generateKafkaMessageId();
-    autorizacion.fechaEnvioKafka = new Date().toISOString();
-    autorizacion.observacion = 'Reintento de publicacion iniciado.';
-
-    const updated =
-      await this.comprasRepository.actualizarAutorizacion(autorizacion);
+    const updated = await this.publicarSolicitudCreada(solicitud, {
+      ...autorizacion,
+      estado: 'ENVIANDO',
+      observacion: 'Reintento de publicacion iniciado.',
+    });
     return { data: this.autorizacionVista(updated, 2) };
   }
 
@@ -394,6 +400,43 @@ export class ComprasService {
         : null;
     }
     return base;
+  }
+
+  private async publicarSolicitudCreada(
+    solicitud: SolicitudCompra,
+    autorizacion: AutorizacionCompra,
+  ): Promise<AutorizacionCompra> {
+    const proveedor = await this.findProveedor(solicitud.idProveedor);
+    const detalles = (await this.comprasRepository.listarDetalles()).filter(
+      (detalle) => detalle.idSolicitud === solicitud.idSolicitud,
+    );
+    const occurredAt = new Date().toISOString();
+
+    try {
+      const result = await this.comprasPublisher.publishSolicitudCreada({
+        eventId: randomUUID(),
+        eventType: 'compras.solicitud-creada',
+        occurredAt,
+        solicitud,
+        proveedor,
+        detalles,
+      });
+
+      return this.comprasRepository.actualizarAutorizacion({
+        ...autorizacion,
+        estado: 'EN_PROCESO',
+        kafkaMessageId: result.messageId,
+        fechaEnvioKafka: occurredAt,
+        observacion: 'Publicacion aceptada por compras.solicitudes.',
+      });
+    } catch (error) {
+      return this.comprasRepository.actualizarAutorizacion({
+        ...autorizacion,
+        estado: 'ERROR_KAFKA',
+        fechaEnvioKafka: occurredAt,
+        observacion: `Error al publicar en Kafka: ${this.errorMessage(error)}`,
+      });
+    }
   }
 
   private autorizacionVista(
@@ -860,8 +903,12 @@ export class ComprasService {
     return `SC-${stamp}-${suffix}`;
   }
 
-  private generateKafkaMessageId(): string {
-    return `msg-${randomUUID().slice(0, 18)}`;
+  private errorMessage(error: unknown): string {
+    if (error instanceof Error) {
+      return error.message.slice(0, 450);
+    }
+
+    return 'Error desconocido';
   }
 
   private validation(field: string, issue: string): HttpException {

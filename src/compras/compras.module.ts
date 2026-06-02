@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { comprasEntities } from '../database/typeorm.options';
 import { ComprasController } from './compras.controller';
 import { ComprasService } from './compras.service';
+import { comprasPublisherProvider } from './publishers/compras-publisher.provider';
 import { COMPRAS_REPOSITORY } from './repositories/compras.repository';
 import { TypeOrmComprasRepository } from './repositories/typeorm-compras.repository';
 
@@ -15,6 +16,7 @@ import { TypeOrmComprasRepository } from './repositories/typeorm-compras.reposit
       provide: COMPRAS_REPOSITORY,
       useClass: TypeOrmComprasRepository,
     },
+    comprasPublisherProvider,
   ],
   exports: [ComprasService],
 })

@@ -184,14 +184,22 @@ export class TypeOrmComprasRepository implements ComprasRepository {
   async actualizarAutorizacion(
     autorizacion: AutorizacionCompra,
   ): Promise<AutorizacionCompra> {
-    const entity = await this.autorizaciones.save({
-      ...autorizacion,
+    await this.autorizaciones.update(autorizacion.idAutorizacion, {
+      idSolicitud: autorizacion.idSolicitud,
+      estado: autorizacion.estado,
+      kafkaMessageId: autorizacion.kafkaMessageId,
       fechaEnvioKafka: autorizacion.fechaEnvioKafka
         ? new Date(autorizacion.fechaEnvioKafka)
         : null,
       fechaRespuestaCaja: autorizacion.fechaRespuestaCaja
         ? new Date(autorizacion.fechaRespuestaCaja)
         : null,
+      resultadoCaja: autorizacion.resultadoCaja,
+      observacion: autorizacion.observacion,
+    });
+
+    const entity = await this.autorizaciones.findOneByOrFail({
+      idAutorizacion: autorizacion.idAutorizacion,
     });
 
     return this.toAutorizacion(entity);
